@@ -1,0 +1,26 @@
+<<<<<<< HEAD
+.DS_Store
+=======
+>>>>>>> d8dd5aeb26db24062ceffb8efd914a97cc80d55b
+*.gem
+*.rbc
+.bundle
+.config
+coverage
+InstalledFiles
+lib/bundler/man
+pkg
+rdoc
+spec/reports
+test/tmp
+test/version_tmp
+tmp
+
+# YARD artifacts
+.yardoc
+_yardoc
+<<<<<<< HEAD
+doc/
+=======
+doc/
+>>>>>>> d8dd5aeb26db24062ceffb8efd914a97cc80d55b
