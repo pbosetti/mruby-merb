@@ -20,14 +20,14 @@ class MERB
     File.open(in_file, 'r') do |f|
       @template = f.read
     end
+    result = self.run
     if out_file then
-      # Dunno why it does not work
-      File.open(out_file, 'w+') do |f|
-        f.write self.run
+      File.unlink(out_file) if File.exist? out_file
+      File.open(out_file, 'w') do |f|
+        f.write result
       end
-    else
-      return self.run
     end
+    return result
   end
   
   def run
@@ -39,28 +39,23 @@ class MERB
   
   def scan
     mode = :text
-    i = 0
-    park = ''
     chunk = ''
+    raise RuntimeError, "Open and close tags must have the same length!" unless @tags[:open].length == @tags[:close].length
+    tag_l = @tags[:open].length
+    window = ' ' * tag_l
     @template.each_char do |c|
-      if park == @tags[:open] then
-        @source << [chunk, :text]
+      window = window[1..-1] + c
+      if window == @tags[:open] then
+        @source << [chunk[0..-tag_l], :text]
         chunk = ''
-        mode = :ruby; park = ''; i = 0
-      elsif park == @tags[:close] then
-        @source << [chunk, :ruby]
+        mode = :ruby
+      elsif window == @tags[:close] then
+        @source << [chunk[0..-tag_l], :ruby]
         chunk = ''
-        mode = :text; park = ''; i = 0
-      end
-        
-      if c == @tags[:open][i] then
-        park << c; i += 1; next
-      elsif c == @tags[:close][i] then
-        park << c; i += 1; next
+        mode = :text
       else
-        chunk << park; park = ''; i = 0
+        chunk << c
       end
-      chunk << c
     end
     unless chunk.empty? then
       @source << [chunk, :text]
@@ -75,7 +70,7 @@ class MERB
         if chunk[0] == "\n" then
           chunk = chunk[1..-1]
         end
-        result << "$merbout.concat \"#{chunk}\"; " 
+        result << "$merbout.concat %q(#{chunk}); " 
       when :ruby
         if chunk[-1] == '-' then
           chunk = chunk[0..-2]; nl = ''
@@ -83,7 +78,7 @@ class MERB
           nl = ' + "\n"'
         end
         if chunk[0] == '=' then
-          result << "$merbout.concat((#{chunk[1..-1]} ).to_s#{nl}); "
+          result << "$merbout.concat((#{chunk[1..-1]}).to_s#{nl}); "
         else
           result << chunk.chomp + ";\n"
         end
