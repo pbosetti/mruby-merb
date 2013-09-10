@@ -55,7 +55,12 @@ class MERB
         chunk = ''
         mode = :text
       else
-        chunk << c
+        case c
+        when '"'
+          chunk << "\""
+        else
+          chunk << c
+        end
       end
     end
     unless chunk.empty? then
@@ -70,11 +75,11 @@ class MERB
       case type
       when :text
         if chunk.match(/^\n\s*$/) && after_output then
-          result << "$merbout.concat %q(#{chunk}); "
+          result << "$merbout.concat \"#{chunk}\"; "
         elsif ! after_output
-          result << "$merbout.concat %q(#{chunk.gsub(/^\n\s*/, "")}); " 
+          result << "$merbout.concat \"#{chunk.gsub(/^\n\s*/, "")}\"; " 
         else
-          result << "$merbout.concat %q(#{chunk}); " 
+          result << "$merbout.concat \"#{chunk}\"; " 
         end
       when :ruby
         if chunk[0] == '=' then
