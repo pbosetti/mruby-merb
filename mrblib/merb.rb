@@ -44,6 +44,7 @@ class MERB
     tag_l = @tags[:open].length
     window = ' ' * tag_l
     @template.each_char do |c|
+      next if c == "\r"
       window = window[1..-1] + c
       if window == @tags[:open] then
         @source << [chunk[0..-tag_l], :text]
@@ -64,22 +65,28 @@ class MERB
   
   def source
     result = "$merbout = ''; "
+    after_output = false
     @source.each do |chunk, type|
       case type
       when :text
-        if chunk[0] == "\n" then
-          chunk = chunk[1..-1]
+        if chunk.match(/^\n\s*$/) && after_output then
+          result << "$merbout.concat %q(#{chunk}); "
+        elsif ! after_output
+          result << "$merbout.concat %q(#{chunk.gsub(/^\n\s*/, "")}); " 
+        else
+          result << "$merbout.concat %q(#{chunk}); " 
         end
-        result << "$merbout.concat %q(#{chunk}); " 
       when :ruby
-        if chunk[-1] == '-' then
-          chunk = chunk[0..-2]; nl = ''
-        else
-          nl = ' + "\n"'
-        end
         if chunk[0] == '=' then
-          result << "$merbout.concat((#{chunk[1..-1]}).to_s#{nl}); "
+          if chunk[-1] == '-' then
+            chunk = chunk[0..-2]
+            after_output = false
+          else
+            after_output = true
+          end
+          result << "$merbout.concat((#{chunk[1..-1]}).to_s); "
         else
+          after_output = false
           result << chunk.chomp + ";\n"
         end
       end
