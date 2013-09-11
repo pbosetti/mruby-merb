@@ -1,17 +1,9 @@
 ##
 # MERB test
 
-assert('MERB#scan') do
-  merb = MERB.new "The value of $x is: <%= $x -%> (<)"
-  result = merb.scan
-  check  = [["The value of $x is: ", :text], ["= $x -", :ruby], [" (<)", :text]]
-  assert_equal(check, result)
+assert('MERB#source') do
+  merb = MERB.new "The value of $x is: (<%= $x %>) \"<%= $x * 2 %>\""
+  check = "$merbout = ''\n$merbout.concat \"The value of $x is: (\"\n$merbout.concat(( $x ).to_s)\n$merbout.concat \") \\\"\"\n$merbout.concat(( $x * 2 ).to_s)\n$merbout.concat \"\\\"\""
+  assert_equal(check, merb.source)
 end
 
-assert('MERB#source') do
-  merb = MERB.new "The value of $x is: <%= $x -%> (<)"
-  merb.scan
-  result = merb.source
-  check  = "$merbout = ''; $merbout.concat \"The value of $x is: \"; $merbout.concat(( $x  ).to_s); $merbout.concat \" (<)\"; "
-  assert_equal(check, result)
-end

@@ -10,43 +10,103 @@
 class MERB
 
   attr_reader :commands
-
+  attr_accessor :template
+  
   def initialize(s = '')
     @tags     = { :open => '<%', :close => '%>' }
     @template = s
     @source   = []
+    @commands = []
+    @tokens   = []
     $merbout  = ''
   end
   
   def convert(in_file, out_file = nil)
-    File.open(in_file, 'r') do |f|
-      @template = f.read
-    end
-    if @template then
-      $merbout = ''
-      self.tokenize
-      self.source
-    end
+    raise RuntimeError, "Open and close tags must have the same length!" unless @tags[:open].length == @tags[:close].length
+
+    @template = File.open(in_file, 'r') { |f| f.read }    
+    
+    self.analyze
 
     if out_file then
       File.unlink(out_file) if File.exist? out_file
-      File.open(out_file, 'w') do |f|
-        f.write $merbout
-      end
+      File.open(out_file, 'w') { |f| f.write $merbout }
     end
+    
     return $merbout
   end
-
+  
+  def analyze(tmpl = nil)
+    if tmpl then
+      @template = tmpl
+    end
+    return eval(self.source)
+  end
+  
+  def source
+    tokenize
+    @commands = ["$merbout = ''"]
+    last_tag  = [:null,:null,:null,:null]
+    @tokens.each do |chunk, type|
+      case type
+      when :ruby_minus then
+        @commands << "$merbout.concat((#{chunk}).to_s)"
+      when :ruby then
+        @commands << "$merbout.concat((#{chunk}).to_s)"
+      when :ruby_cmd then
+        @commands << chunk + ";\n"
+      when :text, :text_nl
+        chunk.gsub!( /\\/m, "\\\\" ) ;
+        chunk.gsub!( /\"/m, "\\\"" ) ;
+        chunk.gsub!( /\'/m, "\\\'" ) ;
+        chunk.gsub!( /\`/m, "\\\`" ) ;
+        chunk.gsub!( /\#/m, "\\\#" ) ; # filtra comandi #{}
+        if type == :text then
+          @commands << "$merbout.concat \"#{chunk}\"" 
+        else
+          @commands << "$merbout.concat \"#{chunk}\\n\" # :text_nl" 
+        end
+      when :blank_nl then
+        @commands << "$merbout.concat \"#{chunk}\\n\" # :blank_nl" if last_tag != :ruby_cmd
+      when :blank then
+        @commands << "$merbout.concat \"#{chunk}\" # :blank"
+      end
+      last_tag = last_tag[1..-1] << type
+      
+      # {:text_nl,:blank_nl} :blank :ruby_cmd :blank_nl --> {:text_nl,:blank_nl} :ruby_cmd
+      # {:text_nl,:blank_nl} :ruby_cmd :blank_nl        --> {:text_nl,:blank_nl} :ruby_cmd
+      if last_tag == [:text_nl,:blank,:ruby_cmd,:blank_nl] then
+        last_tag = [:null,:null,:null,:blank_nl]
+        @commands.pop
+        tmp = @commands.pop
+        @commands.pop
+        @commands << tmp
+      elsif last_tag == [:blank_nl,:blank,:ruby_cmd,:blank_nl] then
+        last_tag = [:null,:null,:null,:blank_nl]
+        @commands.pop
+        tmp = @commands.pop
+        @commands.pop
+        @commands << tmp
+      elsif last_tag[1..-1] == [:text_nl,:ruby_cmd,:blank_nl] then
+        last_tag = [:null,:null,:null,:blank_nl]
+        @commands.pop
+      elsif last_tag[1..-1] == [:blank_nl,:ruby_cmd,:blank_nl] then
+        last_tag = [:null,:null,:null,:blank_nl]
+        @commands.pop
+      end
+    end
+    return @commands.join("\n")
+  end
+  
+  private
   def tokenize
     @tokens = []
-    raise RuntimeError, "Open and close tags must have the same length!" unless @tags[:open].length == @tags[:close].length
-    return unless @template.is_a? String
     state  = [:text]
     chunk  = ''
     tag_l  = @tags[:open].length
     window = ' ' * tag_l
-    # inizio scansione
-    # filtro fine linea
+    # Start scanning
+    # Normalize line endings to UNIX
     @template.gsub!( /\r\n/m, "\n" ) ;
     @template.gsub!( /\r/m, "\n" ) ;
     @template.each_char do |c|
@@ -104,61 +164,6 @@ class MERB
     unless chunk.empty? then
       @tokens << [chunk, :text]
     end
-  end
-  
-  def source
-    @commands = "$merbout = '';\n"
-    last_tag  = [:null,:null,:null,:null]
-    @commands = []
-    @tokens.each { |chunk, type|
-      case type
-      when :ruby_minus then
-        @commands << "$merbout.concat((#{chunk}).to_s);\n"
-      when :ruby then
-        @commands << "$merbout.concat((#{chunk}).to_s);\n"
-      when :ruby_cmd then
-        @commands << chunk + ";\n"
-      when :text, :text_nl
-        chunk.gsub!( /\\/m, "\\\\" ) ;
-        chunk.gsub!( /\"/m, "\\\"" ) ;
-        chunk.gsub!( /\'/m, "\\\'" ) ;
-        chunk.gsub!( /\`/m, "\\\`" ) ;
-        chunk.gsub!( /\#/m, "\\\#" ) ; # filtra comandi #{}
-        if type == :text then
-          @commands << "$merbout.concat \"#{chunk}\";\n" 
-        else
-          @commands << "$merbout.concat \"#{chunk}\\n\"; # :text_nl \n" 
-        end
-      when :blank_nl then
-        @commands << "$merbout.concat \"#{chunk}\\n\"; # :blank_nl\n" if last_tag != :ruby_cmd
-      when :blank then
-        @commands << "$merbout.concat \"#{chunk}\"; # :blank\n"
-      end
-      last_tag = last_tag[1..-1] << type
-      
-      # {:text_nl,:blank_nl} :blank :ruby_cmd :blank_nl --> {:text_nl,:blank_nl} :ruby_cmd
-      # {:text_nl,:blank_nl} :ruby_cmd :blank_nl        --> {:text_nl,:blank_nl} :ruby_cmd
-      if last_tag == [:text_nl,:blank,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
-        @commands.pop
-        tmp = @commands.pop
-        @commands.pop
-        @commands << tmp
-      elsif last_tag == [:blank_nl,:blank,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
-        @commands.pop
-        tmp = @commands.pop
-        @commands.pop
-        @commands << tmp
-      elsif last_tag[1..-1] == [:text_nl,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
-        @commands.pop
-      elsif last_tag[1..-1] == [:blank_nl,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
-        @commands.pop
-      end
-    }
-    eval @commands.join
   end
 end
 
