@@ -54,20 +54,22 @@ class MERB
       when :ruby then
         @commands << "$merbout.concat((#{chunk}).to_s)"
       when :ruby_cmd then
-        @commands << chunk + ";\n"
+        @commands << chunk
       when :text, :text_nl
-        chunk.gsub!( /\\/m, "\\\\" ) ;
-        chunk.gsub!( /\"/m, "\\\"" ) ;
-        chunk.gsub!( /\'/m, "\\\'" ) ;
-        chunk.gsub!( /\`/m, "\\\`" ) ;
-        chunk.gsub!( /\#/m, "\\\#" ) ; # filtra comandi #{}
+        chunk.gsub!( /\\/m, "\\\\" )
+        chunk.gsub!( /\"/m, "\\\"" )
+        chunk.gsub!( /\'/m, "\\\'" )
+        chunk.gsub!( /\`/m, "\\\`" )
+        chunk.gsub!( /\#/m, "\\\#" ) # filtra comandi #{}
         if type == :text then
           @commands << "$merbout.concat \"#{chunk}\"" 
         else
           @commands << "$merbout.concat \"#{chunk}\\n\" # :text_nl" 
         end
       when :blank_nl then
-        @commands << "$merbout.concat \"#{chunk}\\n\" # :blank_nl" if last_tag != :ruby_cmd
+        unless [:ruby_minus, :ruby_cmd].include? last_tag[-1] then
+          @commands << "$merbout.concat \"#{chunk}\\n\" # :blank_nl" 
+        end
       when :blank then
         @commands << "$merbout.concat \"#{chunk}\" # :blank"
       end
@@ -115,18 +117,18 @@ class MERB
       when :text then
         if window == @tags[:open] then
           # cerco di classificare il pezzo di testo
-          tmp = chunk[0..-tag_l] ;
-          if tmp.length > 0 then # se 2 tag consecutivi! niente testo
-            if tmp =~ /^( |\t)*$/ then
-              @tokens << [tmp, :blank]
+          chunk = chunk[0..-tag_l] # get rid of last char of closing tag
+          if chunk.length > 0 then # se 2 tag consecutivi! niente testo
+            if chunk =~ /^\s*$/ then
+              @tokens << [chunk, :blank]
             else
-              @tokens << [tmp, :text]
+              @tokens << [chunk, :text]
             end
           end
           chunk = ''
           state << :ruby
         elsif c == "\n"
-          if chunk =~ /^( |\t)*$/ then
+          if chunk =~ /^\s*$/ then
             @tokens << [chunk, :blank_nl]
           else
             @tokens << [chunk, :text_nl]
@@ -137,14 +139,15 @@ class MERB
         end
       when :ruby then
         if window == @tags[:close] then
+          chunk = chunk[0..-tag_l] # get rid of last char of closing tag
           if chunk[0] == '=' then
             if chunk[-1] == '-' then
-              @tokens << [chunk[1..-tag_l-1], :ruby_minus]
+              @tokens << [chunk[1..-2], :ruby_minus]
             else
-              @tokens << [chunk[1..-tag_l], :ruby]
+              @tokens << [chunk[1..-1], :ruby]
             end
           else
-            @tokens << [chunk[0..-tag_l], :ruby_cmd]
+            @tokens << [chunk[0..-1], :ruby_cmd]
           end
           chunk = ''
           state.pop
