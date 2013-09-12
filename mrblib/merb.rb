@@ -91,10 +91,10 @@ class MERB
         @commands << tmp
       elsif last_tag[1..-1] == [:text_nl,:ruby_cmd,:blank_nl] then
         last_tag = [:null,:null,:null,:blank_nl]
-        @commands.pop
+        #@commands.pop
       elsif last_tag[1..-1] == [:blank_nl,:ruby_cmd,:blank_nl] then
         last_tag = [:null,:null,:null,:blank_nl]
-        @commands.pop
+        #@commands.pop
       end
     end
     return @commands.join("\n")
@@ -175,16 +175,16 @@ end
 if __FILE__ == $0 then
   
   merb = MERB.new <<-EOF
-The value of $x is: <%= $x -%> which is <%= $x > 0 ? "positive" : "negative" -%>.
-Sequence<:%
+The value of $x is: <%= $x %>, which is <%= $x > 0 ? "positive" : "negative" -%>.
+Sequence
 <% 5.times do |i| %>
   i = <%= i %>
 <% end %>
 End of transmission.
 EOF
   $x = 20
-  merb.scan
-  puts merb.run
+  puts merb.analyze
+  p merb.instance_variable_get :@tokens
   
   puts merb.convert("test.erb")
 end
