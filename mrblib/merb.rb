@@ -46,7 +46,7 @@ class MERB
   def source
     tokenize
     @commands = ["$merbout = ''"]
-    last_tag  = [:null,:null,:null,:null]
+    last_tag  = [:null,:null,:null]
     @tokens.each do |chunk, type|
       case type
       when :ruby_minus then
@@ -67,34 +67,29 @@ class MERB
           @commands << "$merbout.concat \"#{chunk}\\n\" # :text_nl" 
         end
       when :blank_nl then
-        unless [:ruby_minus, :ruby_cmd].include? last_tag[-1] then
-          @commands << "$merbout.concat \"#{chunk}\\n\" # :blank_nl" 
-        end
+        @commands << "$merbout.concat \"#{chunk}\\n\" # :blank_nl"
       when :blank then
         @commands << "$merbout.concat \"#{chunk}\" # :blank"
+      else
+        raise RuntimeError, "Unexpected condition in source"
       end
-      last_tag = last_tag[1..-1] << type
-      
-      # {:text_nl,:blank_nl} :blank :ruby_cmd :blank_nl --> {:text_nl,:blank_nl} :ruby_cmd
-      # {:text_nl,:blank_nl} :ruby_cmd :blank_nl        --> {:text_nl,:blank_nl} :ruby_cmd
-      if last_tag == [:text_nl,:blank,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
+      last_tag << type
+      last_tag = last_tag[-3..-1]
+      # three elements rules
+      case last_tag
+      when [:blank,:ruby_cmd,:blank_nl]
+        last_tag = [:null, last_tag[0], last_tag[2] ]
         @commands.pop
-        tmp = @commands.pop
+        @commands.delete_at(-2)
+      when [:blank_nl,:ruby_cmd,:blank_nl], [:text_nl,:ruby_cmd,:blank_nl]
+        last_tag = [last_tag[0], last_tag[1], last_tag[2] ]
         @commands.pop
-        @commands << tmp
-      elsif last_tag == [:blank_nl,:blank,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
+      end
+      # two elements rules 
+      case last_tag[1..-1]
+      when [:ruby_minus,:blank_nl]
+        last_tag = [last_tag[0], last_tag[1], last_tag[2] ]
         @commands.pop
-        tmp = @commands.pop
-        @commands.pop
-        @commands << tmp
-      elsif last_tag[1..-1] == [:text_nl,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
-        #@commands.pop
-      elsif last_tag[1..-1] == [:blank_nl,:ruby_cmd,:blank_nl] then
-        last_tag = [:null,:null,:null,:blank_nl]
-        #@commands.pop
       end
     end
     return @commands.join("\n")
@@ -103,6 +98,7 @@ class MERB
   private
   def tokenize
     @tokens = []
+    return unless @template # skip empty templates
     state  = [:text]
     chunk  = ''
     tag_l  = @tags[:open].length
@@ -175,16 +171,23 @@ end
 if __FILE__ == $0 then
   
   merb = MERB.new <<-EOF
-The value of $x is: <%= $x %>, which is <%= $x > 0 ? "positive" : "negative" -%>.
+The value of $x is: <%= $x -%>
+, which is <%= $x > 0 ? "positive" : "negative" -%>.
 Sequence
 <% 5.times do |i| %>
   i = <%= i %>
 <% end %>
+# testo di prova
+  <% 5.times do |i| 
+    
+     %>
+  i = <%= i %>
+  <% end %>
 End of transmission.
 EOF
   $x = 20
   puts merb.analyze
-  p merb.instance_variable_get :@tokens
+  #puts merb.commands
   
-  puts merb.convert("test.erb")
+  #puts merb.convert("test.erb")
 end
