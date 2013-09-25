@@ -10,7 +10,7 @@
 class MERB
 
   attr_reader :commands
-  attr_accessor :template
+  attr_reader :template
   
   def initialize(s = '')
     @tags     = { :open => '<%', :close => '%>' }
@@ -23,25 +23,26 @@ class MERB
   
   def convert(in_file, out_file = nil)
     raise RuntimeError, "Open and close tags must have the same length!" unless @tags[:open].length == @tags[:close].length
-
-    @template = File.open(in_file, 'r') { |f| f.read }    
     
-    self.analyze
-
-    if out_file then
-      File.unlink(out_file) if File.exist? out_file
-      File.open(out_file, 'w') { |f| f.write $merbout }
-    end
-    
+    File.open(in_file, 'r') { |f| self.analyze(f.read) }
+    self.write_to(out_file) if out_file
     return $merbout
   end
   
+  def template=(str)
+    raise ArgumentError, "Need a String" unless str.kind_of? String
+    @template = str
+  end
+  
   def analyze(tmpl = nil)
-    if tmpl then
-      @template = tmpl
-    end
+    self.template = tmpl if tmpl
     return eval(self.source)
   end
+  
+  def write_to(file)
+    File.open(file, 'w') { |f| f.write $merbout }
+  end
+  alias :save :write_to
   
   def source
     tokenize
@@ -190,7 +191,8 @@ Sequence
   <% end %>
 End of transmission.
 EOF
-  puts result
+  merb.write_to "test2.txt"
+  
   #puts merb.commands
   
   #puts merb.convert("test.erb")
