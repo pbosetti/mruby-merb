@@ -79,12 +79,12 @@ class MERB
       # three elements rules
       case last_tag
       when [:null, :ruby_cmd, :blank_nl] then # elimino eventuale prima riga vuota
-        last_tag = [:null, :null, :ruby_cmd]
+        last_tag = [:null, :null, :null] # per evitare di cancellare righe vuote dopo :ruby_cmd
         @commands.pop
       when [:blank,:ruby_cmd,:blank_nl] then
-        last_tag = [:null, :null, :ruby_cmd ]
+        last_tag = [:null, :null, :null ] # per evitare di cancellare righe vuote dopo :ruby_cmd
         @commands.pop
-        @commands.delete(-2)
+        @commands.delete_at(-2)
       when [:text_nl,:ruby_cmd,:blank_nl] || [:blank_nl,:ruby_cmd,:blank_nl] then
         last_tag = [ :null, last_tag[0], last_tag[1] ]
         @commands.pop
