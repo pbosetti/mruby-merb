@@ -8,7 +8,10 @@
 # 000000000000000000
 
 class MERB
-
+  @@out = ''
+  def self.out;     @@out    ; end
+  def self.out=(v); @@out = v; end
+  
   attr_reader :commands
   attr_reader :template
   
@@ -18,7 +21,7 @@ class MERB
     @source   = []
     @commands = []
     @tokens   = []
-    $merbout  = ''
+    @@out  = ''
   end
   
   def convert(in_file, out_file = nil)
@@ -26,7 +29,7 @@ class MERB
     
     File.open(in_file, 'r') { |f| self.analyze(f.read) }
     self.write_to(out_file) if out_file
-    return $merbout
+    return @@out
   end
   
   def template=(str)
@@ -40,20 +43,20 @@ class MERB
   end
   
   def write_to(file)
-    File.open(file, 'w') { |f| f.write $merbout }
+    File.open(file, 'w') { |f| f.write @@out }
   end
   alias :save :write_to
   
   def source
     tokenize
-    @commands = ["$merbout = ''"]
+    @commands = ["MERB.out = ''"]
     last_tag  = [:null,:null,:null]
     @tokens.each do |chunk, type|
       case type
       when :ruby_minus then
-        @commands << "$merbout.concat((#{chunk}).to_s)"
+        @commands << "MERB.out.concat((#{chunk}).to_s)"
       when :ruby then
-        @commands << "$merbout.concat((#{chunk}).to_s)"
+        @commands << "MERB.out.concat((#{chunk}).to_s)"
       when :ruby_cmd then
         @commands << chunk
       when :text, :text_nl
@@ -63,14 +66,14 @@ class MERB
         chunk.gsub!( /\`/m, "\\\`" )
         chunk.gsub!( /\#/m, "\\\#" ) # filtra comandi #{}
         if type == :text then
-          @commands << "$merbout.concat \"#{chunk}\"" 
+          @commands << "MERB.out.concat \"#{chunk}\"" 
         else
-          @commands << "$merbout.concat \"#{chunk}\\n\" # :text_nl" 
+          @commands << "MERB.out.concat \"#{chunk}\\n\" # :text_nl" 
         end
       when :blank_nl then
-        @commands << "$merbout.concat \"#{chunk}\\n\" # :blank_nl"
+        @commands << "MERB.out.concat \"#{chunk}\\n\" # :blank_nl"
       when :blank then
-        @commands << "$merbout.concat \"#{chunk}\" # :blank"
+        @commands << "MERB.out.concat \"#{chunk}\" # :blank"
       else
         raise RuntimeError, "Unexpected condition in source"
       end
