@@ -43,7 +43,7 @@ class MERB
   end
   
   def write_to(file)
-    File.open(file, 'w') { |f| f.write @@out }
+    File.open(file.chomp, 'w') { |f| f.write @@out }
   end
   alias :save :write_to
   
