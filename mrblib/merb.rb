@@ -39,7 +39,16 @@ class MERB
   
   def analyze(tmpl = nil)
     self.template = tmpl if tmpl
-    return eval(self.source)
+    self.source.each do |block|
+      begin
+        eval(block.join("\n"))
+      rescue => e
+        @@out << "\n\nTemplating Error:\n"
+        @@out << "#{eval(block.last)}\n\n"
+        @@out << e.inspect
+      end
+    end
+    @@out
   end
   
   def write_to(file)
@@ -49,16 +58,19 @@ class MERB
   
   def source
     tokenize
-    @commands = ["MERB.out = ''"]
+    @commands = [["MERB.out = ''"]]
     last_tag  = [:null,:null,:null]
     @tokens.each do |chunk, type|
       case type
+      when :block_eval then
+        @commands.last << chunk
+        @commands << []
       when :ruby_minus then
-        @commands << "MERB.out.concat((#{chunk}).to_s)"
+        @commands.last << "MERB.out.concat((#{chunk}).to_s)"
       when :ruby then
-        @commands << "MERB.out.concat((#{chunk}).to_s)"
+        @commands.last << "MERB.out.concat((#{chunk}).to_s)"
       when :ruby_cmd then
-        @commands << chunk
+        @commands.last << chunk
       when :text, :text_nl
         chunk.gsub!( /\\/m, "\\\\" )
         chunk.gsub!( /\"/m, "\\\"" )
@@ -66,14 +78,14 @@ class MERB
         chunk.gsub!( /\`/m, "\\\`" )
         chunk.gsub!( /\#/m, "\\\#" ) # filtra comandi #{}
         if type == :text then
-          @commands << "MERB.out.concat \"#{chunk}\"" 
+          @commands.last << "MERB.out.concat \"#{chunk}\"" 
         else
-          @commands << "MERB.out.concat \"#{chunk}\\n\" # :text_nl" 
+          @commands.last << "MERB.out.concat \"#{chunk}\\n\" # :text_nl" 
         end
       when :blank_nl then
-        @commands << "MERB.out.concat \"#{chunk}\\n\" # :blank_nl"
+        @commands.last << "MERB.out.concat \"#{chunk}\\n\" # :blank_nl"
       when :blank then
-        @commands << "MERB.out.concat \"#{chunk}\" # :blank"
+        @commands.last << "MERB.out.concat \"#{chunk}\" # :blank"
       else
         raise RuntimeError, "Unexpected condition in source"
       end
@@ -83,23 +95,23 @@ class MERB
       case last_tag
       when [:null, :ruby_cmd, :blank_nl] then # elimino eventuale prima riga vuota
         last_tag = [:null, :null, :null] # per evitare di cancellare righe vuote dopo :ruby_cmd
-        @commands.pop
+        @commands.last.pop
       when [:blank,:ruby_cmd,:blank_nl] then
         last_tag = [:null, :null, :null ] # per evitare di cancellare righe vuote dopo :ruby_cmd
-        @commands.pop
-        @commands.delete_at(-2)
+        @commands.last.pop
+        @commands.last.delete_at(-2)
       when [:text_nl,:ruby_cmd,:blank_nl] || [:blank_nl,:ruby_cmd,:blank_nl] then
         last_tag = [ :null, last_tag[0], last_tag[1] ]
-        @commands.pop
+        @commands.last.pop
       end
       # two elements rules 
       case last_tag[1..-1]
       when [:ruby_minus,:blank_nl] then
         last_tag = [ :null, last_tag[0], last_tag[1] ]
-        @commands.pop
+        @commands.last.pop
       end
     end
-    return @commands.join("\n")
+    return @commands
   end
   
   private
@@ -115,11 +127,11 @@ class MERB
     @template.gsub!( /\r\n/m, "\n" ) ;
     @template.gsub!( /\r/m, "\n" ) ;
     @template.each_char do |c|
-      window = window[1..-1] + c # tiene finestra ultimi caratteri letti
+      window = window[1..-1] + c # Moving window
       case state[-1]
       when :text then
         if window == @tags[:open] then
-          # cerco di classificare il pezzo di testo
+          # Try to classify
           chunk = chunk[0..-tag_l] # get rid of last char of closing tag
           if chunk.length > 0 then # se 2 tag consecutivi! niente testo
             if chunk =~ /^\s*$/ then
@@ -149,6 +161,8 @@ class MERB
             else
               @tokens << [chunk[1..-1], :ruby]
             end
+          elsif chunk[0] == '!' then
+            @tokens << [chunk[1..-1], :block_eval]
           else
             @tokens << [chunk[0..-1], :ruby_cmd]
           end
@@ -184,8 +198,9 @@ The value of $x is: <%= $x -%>
 , which is <%= $x > 0 ? "positive" : "negative" -%>.
 Sequence
 <% 5.times do |i| %>
-  i = <%= i %>
+  i = <%= i; a[0] %>
 <% end %>
+<%! "Error description: evaluating a" %>
 # testo di prova
   <% 5.times do |i| 
     
@@ -195,8 +210,7 @@ Sequence
 End of transmission.
 EOF
   merb.write_to "test2.txt"
-  
-  #puts merb.commands
+  merb.commands.each {|i| p i; puts}
   
   #puts merb.convert("test.erb")
 end
