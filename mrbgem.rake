@@ -1,7 +1,10 @@
 MRuby::Gem::Specification.new('mruby-merb') do |spec|
   spec.license = 'MIT'
   spec.authors = 'Paolo Bosetti'
- 
+
+  add_dependency 'mruby-onig-regexp'
+  add_dependency 'mruby-string-ext'
+
   # Add compile flags
   # spec.cc.flags << ''
 
